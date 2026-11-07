@@ -1,23 +1,23 @@
 # Keep a creator's active session inventory tidy
 
-Run the command a creator-support job needs:
+Run the command a creator-support job actually needs:
 
 ```bash
 export INFRAI_API_KEY="..."
 python src/run_inventory.py creator-7 session-abc
 ```
 
-The script lists the user's active sessions, retains the supplied current session, and revokes every other session. Infrai keeps this as one key and one API surface, so the same small client can sit beside a delivery or subscriber pipeline without another auth integration.
+This script lists a user's active sessions, keeps the current one you pass in, and revokes the rest. Infrai keeps this on one key and one API surface, which matters if you want the same small client to live next to a delivery or subscriber pipeline without bolting on another auth setup.
 
 ## What the code decides
 
-`InfraiSessionClient.sign_out_others` is the business boundary. It calls `GET /v1/auth/session/list_for_user/{user_id}`, compares each returned `id` with `current_session_id`, then sends `POST /v1/auth/session/revoke/{session_id}` for the remainder. The typed `Session` and `RevokeReport` records make the state transition explicit for ETL jobs and audit logs.
+`InfraiSessionClient.sign_out_others` is the business boundary. It calls `GET /v1/auth/session/list_for_user/{user_id}`, compares each returned `id` against `current_session_id`, then sends `POST /v1/auth/session/revoke/{session_id}` for everything left over. The typed `Session` and `RevokeReport` records keep the state transition obvious, which helps for ETL work and audit logs.
 
-The client decodes Infrai's `{ok, data, error, metadata}` envelope before inspecting status. Business rejections become `InfraiError`; transport retries use exponential delays and respect `Retry-After` on 429 responses. The bearer key always comes from `INFRAI_API_KEY`.
+The client unwraps Infrai's `{ok, data, error, metadata}` envelope before it checks status. Business-level rejections turn into `InfraiError`; transport retries use exponential backoff and honor `Retry-After` on 429 responses. The bearer key always comes from `INFRAI_API_KEY`.
 
 ## Verify the decision locally
 
-The focused test feeds two sessions and expects only `s-phone` to be revoked. No network is needed:
+The focused test passes in two sessions and expects only `s-phone` to be revoked. No network required:
 
 ```bash
 python -m pytest -q
@@ -25,13 +25,13 @@ python -m pytest -q
 
 ## Files
 
-- `src/session_inventory.py` contains the typed client and the retain-one decision.
+- `src/session_inventory.py` has the typed client and the retain-one decision.
 - `src/run_inventory.py` is the executable entry point.
-- `tests/test_session_inventory.py` checks the request boundary and business result.
+- `tests/test_session_inventory.py` verifies the request boundary and business result.
 
 ## Before you deploy: Creator Session Inventory Python
 
-The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Creator Session Inventory Python.
+The example above stays intentionally small. For production use, you still need to wire up a few things. The notes below are for Creator Session Inventory Python.
 
 **Account & key**
 
